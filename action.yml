@@ -1,6 +1,6 @@
 name: GitHub - Activity - Readme
 description: Updates README with the recent GitHub activity of a user
-author: jamesgeorge007
+author: guiga-zalu
 
 inputs:
   GH_USERNAME:
@@ -14,6 +14,10 @@ inputs:
   MAX_LINES:
     description: "The maximum number of lines populated in your readme file"
     default: 5
+    required: false
+  LANG:
+    description: "The language to be used"
+    default: "en-US"
     required: false
 
 branding:

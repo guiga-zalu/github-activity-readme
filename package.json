@@ -1,10 +1,10 @@
 {
   "name": "github-activity-readme",
-  "version": "0.3.6",
-  "description": "Updates README with the recent GitHub activity of a user",
+  "version": "0.4.0",
+  "description": "Updates README with the recent GitHub activity of a user, with configurable language",
   "main": "index.js",
   "keywords": [],
-  "author": "James George",
+  "author": "Guilherme Zaluchi",
   "license": "MIT",
   "scripts": {
     "format:check": "prettier --check index.js",
@@ -13,7 +13,8 @@
   },
   "dependencies": {
     "@actions/core": "^1.2.6",
-    "actions-toolkit": "^5.0.0"
+    "actions-toolkit": "^5.0.0",
+    "ini": "^2.0.0"
   },
   "devDependencies": {
     "@zeit/ncc": "^0.22.3",
