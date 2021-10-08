@@ -1,33 +1,16 @@
 const core = require("@actions/core"),
   fs = require("fs"),
-  ini = require("ini"),
   { spawn } = require("child_process"),
   { Toolkit } = require("actions-toolkit");
 
 // Get config
-const GH_USERNAME = core.getInput("GH_USERNAME");
-const COMMIT_MSG = core.getInput("COMMIT_MSG");
-const MAX_LINES = core.getInput("MAX_LINES");
-const LANG = core.getInput("LANG");
+const GH_USERNAME = core.getInput("GH_USERNAME"),
+  COMMIT_MSG = core.getInput("COMMIT_MSG"),
+  MAX_LINES = core.getInput("MAX_LINES"),
+  LANG = core.getInput("LANG");
 
-const texts = (function () {
-  var file;
-  // More languages in the future (maybe)
-  switch (LANG.toLowerCase()) {
-    case "pt-BR":
-    case "pt-EU":
-    case "pt":
-      file = "./lang/pt-BR.ini";
-      break;
-    case "en-US":
-    case "en-GB":
-    case "en":
-    default:
-      file = "./lang/en-US.ini";
-      break;
-  }
-  return ini.decode(fs.readFileSync(file));
-})();
+const texts = require("./lang")(LANG);
+
 /**
  * Returns the sentence case representation
  * @param { string } [str = ""] - the string

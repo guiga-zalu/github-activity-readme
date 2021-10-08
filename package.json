@@ -7,8 +7,8 @@
   "author": "Guilherme Zaluchi",
   "license": "MIT",
   "scripts": {
-    "format:check": "prettier --check index.js",
-    "format": "prettier --write index.js",
+    "format:check": "prettier --check index.js && prettier --check lang.js",
+    "format": "prettier --write index.js && prettier --write lang.js",
     "build": "ncc build index.js -o dist"
   },
   "dependencies": {
