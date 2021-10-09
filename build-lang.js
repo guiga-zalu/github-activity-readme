@@ -23,12 +23,10 @@ async function buildLangFile() {
 		.filter(file => file.endsWith(".ini"))
 		.sort();
 
-	/** @type { LangTranslation } */
-	let translation;
 	for (let file of files)
 		registerTranslation(
 			langs,
-			file.slice(0, -4),
+			file.slice(0, -4).toLowerCase(),
 			ini.decode(await fs.readFile(`./lang/${file}`, "utf8"))
 		);
 

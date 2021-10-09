@@ -1,6 +1,6 @@
 /** @type { LangsDict } */
 const langs = {
-	"en-US": {
+	"en-us": {
 		IssueCommentEvent: "🗣 Commented on $item in $item_repo_name",
 		IssuesEvent: "❗️ $item_payload_action : issue $item in $item_repo_name",
 		PullRequestEvent: {
@@ -18,7 +18,7 @@ const langs = {
 			close: "❌ $item_payload_action : PR $item in $item_repo_name",
 		},
 	},
-	"pt-BR": {
+	"pt-br": {
 		IssueCommentEvent: "🗣 Comentou em $item no repositório $item_repo_name",
 		IssuesEvent:
 			"❗️ $item_payload_action : questão $item no repositório $item_repo_name",

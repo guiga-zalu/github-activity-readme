@@ -16,5 +16,4 @@ jobs:
           node-version: 12
       - run: npm ci
       - run: npm run format:check
-      - run: npm run build:lang
       - run: npm run build
