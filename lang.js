@@ -21,9 +21,11 @@ async function httpsRead(url) {
       res.on("end", () => {
         resolve(rawData);
       });
+      res.on("error", reject);
     });
 
     request.end();
+    request.on("error", reject);
   });
 }
 
@@ -43,9 +45,9 @@ module.exports = function lang(langCode) {
       file = "en-US";
       break;
   }
-  return ini.decode(
-    httpsRead(
-      `https://raw.githubusercontent.com/guiga-zalu/github-activity-readme/master/lang/${file}.ini`
-    )
+  const langData = httpsRead(
+    `https://raw.githubusercontent.com/guiga-zalu/github-activity-readme/master/lang/${file}.ini`
   );
+  if(typeof langData !== "string") throw new TypeError("The result of the request should be a string!")
+  return ini.decode(langData);
 };
