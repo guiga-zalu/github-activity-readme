@@ -7,17 +7,18 @@
   "author": "Guilherme Zaluchi",
   "license": "MIT",
   "scripts": {
-    "format:check": "prettier --check index.js && prettier --check lang.js",
-    "format": "prettier --write index.js && prettier --write lang.js",
+    "format:check": "prettier --check index.js && prettier --check build-lang.js && prettier --check lang.js",
+    "format": "prettier --write index.js && prettier --write build-lang.js && prettier --write lang.js",
+    "build:lang": "node build-lang.js",
     "build": "ncc build index.js -o dist"
   },
   "dependencies": {
     "@actions/core": "^1.2.6",
-    "actions-toolkit": "^5.0.0",
-    "ini": "^2.0.0"
+    "actions-toolkit": "^5.0.0"
   },
   "devDependencies": {
     "@zeit/ncc": "^0.22.3",
+    "ini": "^2.0.0",
     "prettier": "^2.0.5"
   }
 }

@@ -13,7 +13,7 @@ inputs:
     required: false
   MAX_LINES:
     description: "The maximum number of lines populated in your readme file"
-    default: 5
+    default: "5"
     required: false
   LANG:
     description: "The language to be used"
@@ -26,4 +26,4 @@ branding:
 
 runs:
   using: node12
-  main: index.js
+  main: dist/index.js

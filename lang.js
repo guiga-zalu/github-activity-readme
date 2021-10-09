@@ -1,53 +1,78 @@
-const https = require("https"),
-  ini = require("ini");
+/** @type { LangsDict } */
+const langs = {
+	"en-US": {
+		IssueCommentEvent: "🗣 Commented on $item in $item_repo_name",
+		IssuesEvent: "❗️ $item_payload_action : issue $item in $item_repo_name",
+		PullRequestEvent: {
+			merge: "🎉 Merged PR $item in $item_repo_name",
+			open: "💪 $item_payload_action : PR $item in $item_repo_name",
+			close: "❌ $item_payload_action : PR $item in $item_repo_name",
+		},
+	},
+	en: {
+		IssueCommentEvent: "🗣 Commented on $item in $item_repo_name",
+		IssuesEvent: "❗️ $item_payload_action : issue $item in $item_repo_name",
+		PullRequestEvent: {
+			merge: "🎉 Merged PR $item in $item_repo_name",
+			open: "💪 $item_payload_action : PR $item in $item_repo_name",
+			close: "❌ $item_payload_action : PR $item in $item_repo_name",
+		},
+	},
+	"pt-BR": {
+		IssueCommentEvent: "🗣 Comentou em $item no repositório $item_repo_name",
+		IssuesEvent:
+			"❗️ $item_payload_action : questão $item no repositório $item_repo_name",
+		PullRequestEvent: {
+			merge: "🎉 Fundiu PR $item ao repositório $item_repo_name",
+			open: "💪 $item_payload_action PR $item no repositório $item_repo_name",
+			close: "❌ $item_payload_action PR $item no repositório $item_repo_name",
+		},
+	},
+	pt: {
+		IssueCommentEvent: "🗣 Comentou em $item no repositório $item_repo_name",
+		IssuesEvent:
+			"❗️ $item_payload_action : questão $item no repositório $item_repo_name",
+		PullRequestEvent: {
+			merge: "🎉 Fundiu PR $item ao repositório $item_repo_name",
+			open: "💪 $item_payload_action PR $item no repositório $item_repo_name",
+			close: "❌ $item_payload_action PR $item no repositório $item_repo_name",
+		},
+	},
+	default: {
+		IssueCommentEvent: "🗣 Commented on $item in $item_repo_name",
+		IssuesEvent: "❗️ $item_payload_action : issue $item in $item_repo_name",
+		PullRequestEvent: {
+			merge: "🎉 Merged PR $item in $item_repo_name",
+			open: "💪 $item_payload_action : PR $item in $item_repo_name",
+			close: "❌ $item_payload_action : PR $item in $item_repo_name",
+		},
+	},
+};
 /**
- * Downloads the lang file through HTTP[S].
- * Based on https://stackoverflow.com/a/62056725/11622835
+ * @param { LangCode } [langCode]
+ * @returns { LangTranslation }
  */
-async function httpsRead(url) {
-  return new Promise((resolve, reject) => {
-    const request = https.get(url, (res) => {
-      if (res.statusCode !== 200) {
-        reject(new Error(`Failed to get '${url}' (${res.statusCode})`));
-        return;
-      }
+function langTranslations(langCode) {
+	if (typeof langCode !== "string") return langs.default;
 
-      res.setEncoding("utf8");
+	langCode = langCode.toLowerCase();
+	if (langCode in langs) return langs[langCode];
 
-      let rawData = "";
-      res.on("data", (chunk) => {
-        rawData += chunk;
-      });
-      res.on("end", () => {
-        resolve(rawData);
-      });
-      res.on("error", reject);
-    });
+	let index = langCode.lastIndexOf("-");
 
-    request.end();
-    request.on("error", reject);
-  });
+	return langTranslations(index > -1 ? langCode.slice(0, index) : false);
 }
 
-module.exports = function lang(langCode) {
-  var file;
-  // More languages in the future (maybe)
-  switch (langCode.toLowerCase()) {
-    case "pt-BR":
-    case "pt-EU":
-    case "pt":
-      file = "pt-BR";
-      break;
-    case "en-US":
-    case "en-GB":
-    case "en":
-    default:
-      file = "en-US";
-      break;
-  }
-  const langData = httpsRead(
-    `https://raw.githubusercontent.com/guiga-zalu/github-activity-readme/master/lang/${file}.ini`
-  );
-  if(typeof langData !== "string") throw new TypeError("The result of the request should be a string!")
-  return ini.decode(langData);
-};
+module.exports = langTranslations;
+
+/** @typedef { string } LangCode */
+/**
+ * @typedef { Object } LangTranslation
+ * @property { string } IssueCommentEvent
+ * @property { string } IssuesEvent
+ * @property { Object } PullRequestEvent
+ * @property { string } PullRequestEvent.merge
+ * @property { string } PullRequestEvent.open
+ * @property { string } PullRequestEvent.close
+ */
+/** @typedef {{ [code: LangCode]: LangTranslation }} LangsDict */

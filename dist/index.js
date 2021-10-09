@@ -1272,219 +1272,6 @@ module.exports = require("readline");
 
 /***/ }),
 
-/***/ 62:
-/***/ (function(module) {
-
-const { hasOwnProperty } = Object.prototype
-
-const eol = typeof process !== 'undefined' &&
-  process.platform === 'win32' ? '\r\n' : '\n'
-
-const encode = (obj, opt) => {
-  const children = []
-  let out = ''
-
-  if (typeof opt === 'string') {
-    opt = {
-      section: opt,
-      whitespace: false,
-    }
-  } else {
-    opt = opt || Object.create(null)
-    opt.whitespace = opt.whitespace === true
-  }
-
-  const separator = opt.whitespace ? ' = ' : '='
-
-  for (const k of Object.keys(obj)) {
-    const val = obj[k]
-    if (val && Array.isArray(val)) {
-      for (const item of val)
-        out += safe(k + '[]') + separator + safe(item) + '\n'
-    } else if (val && typeof val === 'object')
-      children.push(k)
-    else
-      out += safe(k) + separator + safe(val) + eol
-  }
-
-  if (opt.section && out.length)
-    out = '[' + safe(opt.section) + ']' + eol + out
-
-  for (const k of children) {
-    const nk = dotSplit(k).join('\\.')
-    const section = (opt.section ? opt.section + '.' : '') + nk
-    const { whitespace } = opt
-    const child = encode(obj[k], {
-      section,
-      whitespace,
-    })
-    if (out.length && child.length)
-      out += eol
-
-    out += child
-  }
-
-  return out
-}
-
-const dotSplit = str =>
-  str.replace(/\1/g, '\u0002LITERAL\\1LITERAL\u0002')
-    .replace(/\\\./g, '\u0001')
-    .split(/\./)
-    .map(part =>
-      part.replace(/\1/g, '\\.')
-        .replace(/\2LITERAL\\1LITERAL\2/g, '\u0001'))
-
-const decode = str => {
-  const out = Object.create(null)
-  let p = out
-  let section = null
-  //          section     |key      = value
-  const re = /^\[([^\]]*)\]$|^([^=]+)(=(.*))?$/i
-  const lines = str.split(/[\r\n]+/g)
-
-  for (const line of lines) {
-    if (!line || line.match(/^\s*[;#]/))
-      continue
-    const match = line.match(re)
-    if (!match)
-      continue
-    if (match[1] !== undefined) {
-      section = unsafe(match[1])
-      if (section === '__proto__') {
-        // not allowed
-        // keep parsing the section, but don't attach it.
-        p = Object.create(null)
-        continue
-      }
-      p = out[section] = out[section] || Object.create(null)
-      continue
-    }
-    const keyRaw = unsafe(match[2])
-    const isArray = keyRaw.length > 2 && keyRaw.slice(-2) === '[]'
-    const key = isArray ? keyRaw.slice(0, -2) : keyRaw
-    if (key === '__proto__')
-      continue
-    const valueRaw = match[3] ? unsafe(match[4]) : true
-    const value = valueRaw === 'true' ||
-      valueRaw === 'false' ||
-      valueRaw === 'null' ? JSON.parse(valueRaw)
-      : valueRaw
-
-    // Convert keys with '[]' suffix to an array
-    if (isArray) {
-      if (!hasOwnProperty.call(p, key))
-        p[key] = []
-      else if (!Array.isArray(p[key]))
-        p[key] = [p[key]]
-    }
-
-    // safeguard against resetting a previously defined
-    // array by accidentally forgetting the brackets
-    if (Array.isArray(p[key]))
-      p[key].push(value)
-    else
-      p[key] = value
-  }
-
-  // {a:{y:1},"a.b":{x:2}} --> {a:{y:1,b:{x:2}}}
-  // use a filter to return the keys that have to be deleted.
-  const remove = []
-  for (const k of Object.keys(out)) {
-    if (!hasOwnProperty.call(out, k) ||
-        typeof out[k] !== 'object' ||
-        Array.isArray(out[k]))
-      continue
-
-    // see if the parent section is also an object.
-    // if so, add it to that, and mark this one for deletion
-    const parts = dotSplit(k)
-    let p = out
-    const l = parts.pop()
-    const nl = l.replace(/\\\./g, '.')
-    for (const part of parts) {
-      if (part === '__proto__')
-        continue
-      if (!hasOwnProperty.call(p, part) || typeof p[part] !== 'object')
-        p[part] = Object.create(null)
-      p = p[part]
-    }
-    if (p === out && nl === l)
-      continue
-
-    p[nl] = out[k]
-    remove.push(k)
-  }
-  for (const del of remove)
-    delete out[del]
-
-  return out
-}
-
-const isQuoted = val =>
-  (val.charAt(0) === '"' && val.slice(-1) === '"') ||
-    (val.charAt(0) === "'" && val.slice(-1) === "'")
-
-const safe = val =>
-  (typeof val !== 'string' ||
-    val.match(/[=\r\n]/) ||
-    val.match(/^\[/) ||
-    (val.length > 1 &&
-     isQuoted(val)) ||
-    val !== val.trim())
-    ? JSON.stringify(val)
-    : val.replace(/;/g, '\\;').replace(/#/g, '\\#')
-
-const unsafe = (val, doUnesc) => {
-  val = (val || '').trim()
-  if (isQuoted(val)) {
-    // remove the single quotes before calling JSON.parse
-    if (val.charAt(0) === "'")
-      val = val.substr(1, val.length - 2)
-
-    try {
-      val = JSON.parse(val)
-    } catch (_) {}
-  } else {
-    // walk the val to find the first not-escaped ; character
-    let esc = false
-    let unesc = ''
-    for (let i = 0, l = val.length; i < l; i++) {
-      const c = val.charAt(i)
-      if (esc) {
-        if ('\\;#'.indexOf(c) !== -1)
-          unesc += c
-        else
-          unesc += '\\' + c
-
-        esc = false
-      } else if (';#'.indexOf(c) !== -1)
-        break
-      else if (c === '\\')
-        esc = true
-      else
-        unesc += c
-    }
-    if (esc)
-      unesc += '\\'
-
-    return unesc.trim()
-  }
-  return val
-}
-
-module.exports = {
-  parse: decode,
-  decode,
-  stringify: encode,
-  encode,
-  safe,
-  unsafe,
-}
-
-
-/***/ }),
-
 /***/ 72:
 /***/ (function(module) {
 
@@ -1748,15 +1535,15 @@ exports.issueCommand = issueCommand;
 /***/ (function(__unusedmodule, __unusedexports, __webpack_require__) {
 
 const core = __webpack_require__(470),
-  fs = __webpack_require__(747),
-  { spawn } = __webpack_require__(129),
-  { Toolkit } = __webpack_require__(461);
+	fs = __webpack_require__(747),
+	{ spawn } = __webpack_require__(129),
+	{ Toolkit } = __webpack_require__(461);
 
 // Get config
 const GH_USERNAME = core.getInput("GH_USERNAME"),
-  COMMIT_MSG = core.getInput("COMMIT_MSG"),
-  MAX_LINES = core.getInput("MAX_LINES"),
-  LANG = core.getInput("LANG");
+	COMMIT_MSG = core.getInput("COMMIT_MSG"),
+	MAX_LINES = parseInt(core.getInput("MAX_LINES")),
+	LANG = core.getInput("LANG");
 
 const texts = __webpack_require__(258)(LANG);
 
@@ -1778,13 +1565,13 @@ const urlPrefix = "https://github.com";
  * @returns { string }
  */
 
-const toUrlFormat = (item) => {
-  if (typeof item === "object")
-    return Object.hasOwnProperty.call(item.payload, "issue")
-      ? `[#${item.payload.issue.number}](${urlPrefix}/${item.repo.name}/issues/${item.payload.issue.number})`
-      : `[#${item.payload.pull_request.number}](${urlPrefix}/${item.repo.name}/pull/${item.payload.pull_request.number})`;
+const toUrlFormat = item => {
+	if (typeof item === "object")
+		return Object.hasOwnProperty.call(item.payload, "issue")
+			? `[#${item.payload.issue.number}](${urlPrefix}/${item.repo.name}/issues/${item.payload.issue.number})`
+			: `[#${item.payload.pull_request.number}](${urlPrefix}/${item.repo.name}/pull/${item.payload.pull_request.number})`;
 
-  return `[${item}](${urlPrefix}/${item})`;
+	return `[${item}](${urlPrefix}/${item})`;
 };
 
 /**
@@ -1796,22 +1583,22 @@ const toUrlFormat = (item) => {
  */
 
 const exec = (cmd, args = []) =>
-  new Promise((resolve, reject) => {
-    const app = spawn(cmd, args, { stdio: "pipe" });
-    let stdout = "";
-    app.stdout.on("data", (data) => {
-      stdout = data;
-    });
-    app.on("close", (code) => {
-      if (code === 0 || stdout.includes("nothing to commit"))
-        return resolve(code);
+	new Promise((resolve, reject) => {
+		const app = spawn(cmd, args, { stdio: "pipe" });
+		let stdout = "";
+		app.stdout.on("data", data => {
+			stdout = data;
+		});
+		app.on("close", code => {
+			if (code === 0 || stdout.includes("nothing to commit"))
+				return resolve(code);
 
-      err = new Error(`Invalid status code: ${code}`);
-      err.code = code;
-      return reject(err);
-    });
-    app.on("error", reject);
-  });
+			err = new Error(`Invalid status code: ${code}`);
+			err.code = code;
+			return reject(err);
+		});
+		app.on("error", reject);
+	});
 
 /**
  * Make a commit
@@ -1820,173 +1607,173 @@ const exec = (cmd, args = []) =>
  */
 
 const commitFile = async () => {
-  await exec("git", [
-    "config",
-    "--global",
-    "user.email",
-    "41898282+github-actions[bot]@users.noreply.github.com",
-  ]);
-  await exec("git", ["config", "--global", "user.name", "readme-bot"]);
-  await exec("git", ["add", "README.md"]);
-  await exec("git", ["commit", "-m", COMMIT_MSG]);
-  await exec("git", ["push"]);
+	await exec("git", [
+		"config",
+		"--global",
+		"user.email",
+		"41898282+github-actions[bot]@users.noreply.github.com",
+	]);
+	await exec("git", ["config", "--global", "user.name", "readme-bot"]);
+	await exec("git", ["add", "README.md"]);
+	await exec("git", ["commit", "-m", COMMIT_MSG]);
+	await exec("git", ["push"]);
 };
 
 const serializers = {
-  IssueCommentEvent(item) {
-    return texts.IssueCommentEvent.replace(
-      "$item_repo_name",
-      toUrlFormat(item.repo.name)
-    ).replace("$item", toUrlFormat(item));
-  },
-  IssuesEvent(item) {
-    return texts.IssuesEvent.replace(
-      "$item_payload_action",
-      capitalize(item.payload.action)
-    )
-      .replace("$item_repo_name", toUrlFormat(item.repo.name))
-      .replace("$item", toUrlFormat(item));
-  },
-  PullRequestEvent(item) {
-    if (item.payload.pull_request.merged)
-      return texts.PullRequestEvent.merge
-        .replace("$item_repo_name", toUrlFormat(item.repo.name))
-        .replace("$item", toUrlFormat(item));
+	IssueCommentEvent(item) {
+		return texts.IssueCommentEvent.replace(
+			"$item_repo_name",
+			toUrlFormat(item.repo.name)
+		).replace("$item", toUrlFormat(item));
+	},
+	IssuesEvent(item) {
+		return texts.IssuesEvent.replace(
+			"$item_payload_action",
+			capitalize(item.payload.action)
+		)
+			.replace("$item_repo_name", toUrlFormat(item.repo.name))
+			.replace("$item", toUrlFormat(item));
+	},
+	PullRequestEvent(item) {
+		if (item.payload.pull_request.merged)
+			return texts.PullRequestEvent.merge
+				.replace("$item_repo_name", toUrlFormat(item.repo.name))
+				.replace("$item", toUrlFormat(item));
 
-    if (item.payload.action === "opened")
-      return texts.PullRequestEvent.open
-        .replace("$item_payload_action", capitalize(item.payload.action))
-        .replace("$item_repo_name", toUrlFormat(item.repo.name))
-        .replace("$item", toUrlFormat(item));
+		if (item.payload.action === "opened")
+			return texts.PullRequestEvent.open
+				.replace("$item_payload_action", capitalize(item.payload.action))
+				.replace("$item_repo_name", toUrlFormat(item.repo.name))
+				.replace("$item", toUrlFormat(item));
 
-    return texts.PullRequestEvent.close
-      .replace("$item_payload_action", capitalize(item.payload.action))
-      .replace("$item_repo_name", toUrlFormat(item.repo.name))
-      .replace("$item", toUrlFormat(item));
-  },
+		return texts.PullRequestEvent.close
+			.replace("$item_payload_action", capitalize(item.payload.action))
+			.replace("$item_repo_name", toUrlFormat(item.repo.name))
+			.replace("$item", toUrlFormat(item));
+	},
 };
 
 async function toolkitFn(tools) {
-  // Get the user's public events
-  tools.log.debug(`Getting activity for ${GH_USERNAME}`);
-  const events = await tools.github.activity.listPublicEventsForUser({
-    username: GH_USERNAME,
-    per_page: 100,
-  });
-  tools.log.debug(
-    `Activity for ${GH_USERNAME}, ${events.data.length} events found.`
-  );
+	// Get the user's public events
+	tools.log.debug(`Getting activity for ${GH_USERNAME}`);
+	const events = await tools.github.activity.listPublicEventsForUser({
+		username: GH_USERNAME,
+		per_page: 100,
+	});
+	tools.log.debug(
+		`Activity for ${GH_USERNAME}, ${events.data.length} events found.`
+	);
 
-  const content = events.data
-    // Filter out any boring activity
-    .filter((event) => serializers.hasOwnProperty(event.type))
-    // We only have 'MAX_LINES' lines to work with
-    .slice(0, MAX_LINES)
-    // Call the serializer to construct a string
-    .map((item) => serializers[item.type](item));
+	const content = events.data
+		// Filter out any boring activity
+		.filter(event => serializers.hasOwnProperty(event.type))
+		// We only have 'MAX_LINES' lines to work with
+		.slice(0, MAX_LINES)
+		// Call the serializer to construct a string
+		.map(item => serializers[item.type](item));
 
-  const readmeContent = fs.readFileSync("./README.md", "utf-8").split("\n");
+	const readmeContent = fs.readFileSync("./README.md", "utf-8").split("\n");
 
-  // Find the index corresponding to <!--START_SECTION:activity--> comment
-  let startIdx = readmeContent.findIndex(
-    (content) => content.trim() === "<!--START_SECTION:activity-->"
-  );
+	// Find the index corresponding to <!--START_SECTION:activity--> comment
+	let startIdx = readmeContent.findIndex(
+		content => content.trim() === "<!--START_SECTION:activity-->"
+	);
 
-  // Early return in case the <!--START_SECTION:activity--> comment was not found
-  if (startIdx === -1)
-    return tools.exit.failure(
-      `Couldn't find the <!--START_SECTION:activity--> comment. Exiting!`
-    );
+	// Early return in case the <!--START_SECTION:activity--> comment was not found
+	if (startIdx === -1)
+		return tools.exit.failure(
+			`Couldn't find the <!--START_SECTION:activity--> comment. Exiting!`
+		);
 
-  // Find the index corresponding to <!--END_SECTION:activity--> comment
-  const endIdx = readmeContent.findIndex(
-    (content) => content.trim() === "<!--END_SECTION:activity-->"
-  );
+	// Find the index corresponding to <!--END_SECTION:activity--> comment
+	const endIdx = readmeContent.findIndex(
+		content => content.trim() === "<!--END_SECTION:activity-->"
+	);
 
-  if (!content.length)
-    tools.exit.failure("No PullRequest/Issue/IssueComment events found");
+	if (!content.length)
+		tools.exit.failure("No PullRequest/Issue/IssueComment events found");
 
-  if (content.length < MAX_LINES)
-    tools.log.info(`Found less than MAX_LINES=${MAX_LINES} activities`);
+	if (content.length < MAX_LINES)
+		tools.log.info(`Found less than MAX_LINES=${MAX_LINES} activities`);
 
-  if (startIdx !== -1 && endIdx === -1) {
-    // Add one since the content needs to be inserted just after the initial comment
-    startIdx++;
-    content.forEach((line, idx) =>
-      readmeContent.splice(startIdx + idx, 0, `${idx + 1}. ${line}`)
-    );
+	if (startIdx !== -1 && endIdx === -1) {
+		// Add one since the content needs to be inserted just after the initial comment
+		startIdx++;
+		content.forEach((line, idx) =>
+			readmeContent.splice(startIdx + idx, 0, `${idx + 1}. ${line}`)
+		);
 
-    // Append <!--END_SECTION:activity--> comment
-    readmeContent.splice(
-      startIdx + content.length,
-      0,
-      "<!--END_SECTION:activity-->"
-    );
+		// Append <!--END_SECTION:activity--> comment
+		readmeContent.splice(
+			startIdx + content.length,
+			0,
+			"<!--END_SECTION:activity-->"
+		);
 
-    // Update README
-    fs.writeFileSync("./README.md", readmeContent.join("\n"));
+		// Update README
+		fs.writeFileSync("./README.md", readmeContent.join("\n"));
 
-    // Commit to the remote repository
-    try {
-      await commitFile();
-    } catch (err) {
-      tools.log.debug("Something went wrong");
-      return tools.exit.failure(err);
-    }
-    tools.exit.success("Wrote to README");
-  }
+		// Commit to the remote repository
+		try {
+			await commitFile();
+		} catch (err) {
+			tools.log.debug("Something went wrong");
+			return tools.exit.failure(err);
+		}
+		tools.exit.success("Wrote to README");
+	}
 
-  const oldContent = readmeContent.slice(startIdx + 1, endIdx).join("\n");
-  const newContent = content
-    .map((line, idx) => `${idx + 1}. ${line}`)
-    .join("\n");
+	const oldContent = readmeContent.slice(startIdx + 1, endIdx).join("\n");
+	const newContent = content
+		.map((line, idx) => `${idx + 1}. ${line}`)
+		.join("\n");
 
-  if (oldContent.trim() === newContent.trim())
-    tools.exit.success("No changes detected");
+	if (oldContent.trim() === newContent.trim())
+		tools.exit.success("No changes detected");
 
-  startIdx++;
+	startIdx++;
 
-  // Recent GitHub Activity content between the comments
-  const readmeActivitySection = readmeContent.slice(startIdx, endIdx);
-  if (!readmeActivitySection.length) {
-    content.some((line, idx) => {
-      // User doesn't have 'MAX_LINES' public events
-      if (!line) return true;
+	// Recent GitHub Activity content between the comments
+	const readmeActivitySection = readmeContent.slice(startIdx, endIdx);
+	if (!readmeActivitySection.length) {
+		content.some((line, idx) => {
+			// User doesn't have 'MAX_LINES' public events
+			if (!line) return true;
 
-      readmeContent.splice(startIdx + idx, 0, `${idx + 1}. ${line}`);
-    });
-    tools.log.success("Wrote to README");
-  } else {
-    // It is likely that a newline is inserted after the <!--START_SECTION:activity--> comment (code formatter)
-    let count = 0;
+			readmeContent.splice(startIdx + idx, 0, `${idx + 1}. ${line}`);
+		});
+		tools.log.success("Wrote to README");
+	} else {
+		// It is likely that a newline is inserted after the <!--START_SECTION:activity--> comment (code formatter)
+		let count = 0;
 
-    readmeActivitySection.some((line, idx) => {
-      // User doesn't have 'MAX_LINES' public events
-      if (!content[count]) return true;
+		readmeActivitySection.some((line, idx) => {
+			// User doesn't have 'MAX_LINES' public events
+			if (!content[count]) return true;
 
-      if (line !== "") {
-        readmeContent[startIdx + idx] = `${count + 1}. ${content[count]}`;
-        count++;
-      }
-    });
-    tools.log.success("Updated README with the recent activity");
-  }
+			if (line !== "") {
+				readmeContent[startIdx + idx] = `${count + 1}. ${content[count]}`;
+				count++;
+			}
+		});
+		tools.log.success("Updated README with the recent activity");
+	}
 
-  // Update README
-  fs.writeFileSync("./README.md", readmeContent.join("\n"));
+	// Update README
+	fs.writeFileSync("./README.md", readmeContent.join("\n"));
 
-  // Commit to the remote repository
-  try {
-    await commitFile();
-  } catch (err) {
-    tools.log.debug("Something went wrong");
-    return tools.exit.failure(err);
-  }
-  tools.exit.success("Pushed to remote repository");
+	// Commit to the remote repository
+	try {
+		await commitFile();
+	} catch (err) {
+		tools.log.debug("Something went wrong");
+		return tools.exit.failure(err);
+	}
+	tools.exit.success("Pushed to remote repository");
 }
 Toolkit.run(toolkitFn, {
-  event: ["schedule", "workflow_dispatch"],
-  secrets: ["GITHUB_TOKEN"],
+	event: ["schedule", "workflow_dispatch"],
+	secrets: ["GITHUB_TOKEN"],
 });
 
 
@@ -3459,59 +3246,86 @@ function patch (fs) {
 /***/ }),
 
 /***/ 258:
-/***/ (function(module, __unusedexports, __webpack_require__) {
+/***/ (function(module) {
 
-const https = __webpack_require__(211),
-  ini = __webpack_require__(62);
+/** @type { LangsDict } */
+const langs = {
+	"en-US": {
+		IssueCommentEvent: "🗣 Commented on $item in $item_repo_name",
+		IssuesEvent: "❗️ $item_payload_action : issue $item in $item_repo_name",
+		PullRequestEvent: {
+			merge: "🎉 Merged PR $item in $item_repo_name",
+			open: "💪 $item_payload_action : PR $item in $item_repo_name",
+			close: "❌ $item_payload_action : PR $item in $item_repo_name",
+		},
+	},
+	en: {
+		IssueCommentEvent: "🗣 Commented on $item in $item_repo_name",
+		IssuesEvent: "❗️ $item_payload_action : issue $item in $item_repo_name",
+		PullRequestEvent: {
+			merge: "🎉 Merged PR $item in $item_repo_name",
+			open: "💪 $item_payload_action : PR $item in $item_repo_name",
+			close: "❌ $item_payload_action : PR $item in $item_repo_name",
+		},
+	},
+	"pt-BR": {
+		IssueCommentEvent: "🗣 Comentou em $item no repositório $item_repo_name",
+		IssuesEvent:
+			"❗️ $item_payload_action : questão $item no repositório $item_repo_name",
+		PullRequestEvent: {
+			merge: "🎉 Fundiu PR $item ao repositório $item_repo_name",
+			open: "💪 $item_payload_action PR $item no repositório $item_repo_name",
+			close: "❌ $item_payload_action PR $item no repositório $item_repo_name",
+		},
+	},
+	pt: {
+		IssueCommentEvent: "🗣 Comentou em $item no repositório $item_repo_name",
+		IssuesEvent:
+			"❗️ $item_payload_action : questão $item no repositório $item_repo_name",
+		PullRequestEvent: {
+			merge: "🎉 Fundiu PR $item ao repositório $item_repo_name",
+			open: "💪 $item_payload_action PR $item no repositório $item_repo_name",
+			close: "❌ $item_payload_action PR $item no repositório $item_repo_name",
+		},
+	},
+	default: {
+		IssueCommentEvent: "🗣 Commented on $item in $item_repo_name",
+		IssuesEvent: "❗️ $item_payload_action : issue $item in $item_repo_name",
+		PullRequestEvent: {
+			merge: "🎉 Merged PR $item in $item_repo_name",
+			open: "💪 $item_payload_action : PR $item in $item_repo_name",
+			close: "❌ $item_payload_action : PR $item in $item_repo_name",
+		},
+	},
+};
 /**
- * Downloads the lang file through HTTP[S].
- * Based on https://stackoverflow.com/a/62056725/11622835
+ * @param { LangCode } [langCode]
+ * @returns { LangTranslation }
  */
-async function httpsRead(url) {
-  return new Promise((resolve, reject) => {
-    const request = https.get(url, (res) => {
-      if (res.statusCode !== 200) {
-        reject(new Error(`Failed to get '${url}' (${res.statusCode})`));
-        return;
-      }
+function langTranslations(langCode) {
+	if (typeof langCode !== "string") return langs.default;
 
-      res.setEncoding("utf8");
+	langCode = langCode.toLowerCase();
+	if (langCode in langs) return langs[langCode];
 
-      let rawData = "";
-      res.on("data", (chunk) => {
-        rawData += chunk;
-      });
-      res.on("end", () => {
-        resolve(rawData);
-      });
-    });
+	let index = langCode.lastIndexOf("-");
 
-    request.end();
-  });
+	return langTranslations(index > -1 ? langCode.slice(0, index) : false);
 }
 
-module.exports = function lang(langCode) {
-  var file;
-  // More languages in the future (maybe)
-  switch (langCode.toLowerCase()) {
-    case "pt-BR":
-    case "pt-EU":
-    case "pt":
-      file = "pt-BR";
-      break;
-    case "en-US":
-    case "en-GB":
-    case "en":
-    default:
-      file = "en-US";
-      break;
-  }
-  return ini.decode(
-    httpsRead(
-      `https://raw.githubusercontent.com/guiga-zalu/github-activity-readme/master/lang/${file}.ini`
-    )
-  );
-};
+module.exports = langTranslations;
+
+/** @typedef { string } LangCode */
+/**
+ * @typedef { Object } LangTranslation
+ * @property { string } IssueCommentEvent
+ * @property { string } IssuesEvent
+ * @property { Object } PullRequestEvent
+ * @property { string } PullRequestEvent.merge
+ * @property { string } PullRequestEvent.open
+ * @property { string } PullRequestEvent.close
+ */
+/** @typedef {{ [code: LangCode]: LangTranslation }} LangsDict */
 
 
 /***/ }),
